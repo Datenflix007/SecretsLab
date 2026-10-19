@@ -1,0 +1,21 @@
+services:
+  mongo:
+    image: mongo:8
+    container_name: secrets-lab-mongo
+    ports:
+      - "127.0.0.1:27018:27017"
+    volumes:
+      - mongo_data:/data/db
+  vault:
+    image: hashicorp/vault:1.20
+    container_name: secrets-lab-vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: dev-only-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    command: server -dev
+    ports:
+      - "127.0.0.1:8200:8200"
+volumes:
+  mongo_data:
