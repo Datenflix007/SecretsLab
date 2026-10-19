@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import requests
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError
 
 VAULT_URL = os.getenv('VAULT_ADDR', 'http://127.0.0.1:8200')
 VAULT_TOKEN = os.getenv('VAULT_TOKEN', 'dev-only-token')
@@ -39,6 +40,8 @@ def main():
     parser.add_argument('operation', choices=['put', 'list', 'get', 'delete'])
     parser.add_argument('--user', default='demo-user')
     parser.add_argument('--provider', default='openai')
+    parser.add_argument('--providers-only', action='store_true',
+                        help='bei list nur Providernamen ausgeben')
     args = parser.parse_args()
 
     client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=5000)
@@ -65,11 +68,17 @@ def main():
             'metadata': {'last_four': secret[-4:], 'status': 'unverified'},
             'updated_at': datetime.now(timezone.utc),
         }
-        coll.replace_one(selector, doc, upsert=True)
+        try:
+            coll.insert_one(doc)
+        except DuplicateKeyError:
+            parser.error(
+                f"Für Provider '{args.provider}' ist bereits ein Schlüssel gespeichert. "
+                "Lösche ihn zuerst, bevor du einen neuen hinterlegst."
+            )
         print('Gespeichert. MongoDB enthält keinen unverschlüsselten API-Key.')
     elif args.operation == 'list':
         for doc in coll.find({'user_id': args.user}, {'_id': 0, 'provider': 1, 'metadata': 1}):
-            print(doc)
+            print(doc['provider'] if args.providers_only else doc)
     elif args.operation == 'get':
         doc = coll.find_one(selector)
         if not doc:
